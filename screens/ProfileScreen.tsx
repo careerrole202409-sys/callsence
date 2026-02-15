@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, 
-  TextInput, Alert, ActivityIndicator, Image,
-  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard 
+  TextInput, Alert, ActivityIndicator, Image, Platform 
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy'; // 最新版SDK対応
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 
@@ -69,9 +68,13 @@ export default function ProfileScreen() {
     }
   }
 
-  // 写真選択とアップロード
   async function pickImage() {
     try {
+      if (Platform.OS === 'web') {
+        Alert.alert('未対応', 'Web版では画像アップロードは未対応です');
+        return;
+      }
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('許可が必要', '画像へのアクセスを許可してください');
@@ -122,7 +125,6 @@ export default function ProfileScreen() {
     }
   }
 
-  // 保存
   async function handleSave() {
     if (!username.trim()) {
       Alert.alert('確認', 'お名前を入力してください');
@@ -152,8 +154,15 @@ export default function ProfileScreen() {
     }
   }
 
-  // ログアウト
-  const handleLogout = async () => {
+const handleLogout = async () => {
+  if (Platform.OS === 'web') {
+    if (window.confirm('ログアウトしますか？')) {
+      await supabase.auth.signOut();
+      setUsername(''); setLocation(''); setHobbies(''); setBio(''); setAvatarUrl(null);
+      setCurrentView('edit');
+      initializeUser();
+    }
+  } else {
     Alert.alert("ログアウト", "よろしいですか？", [
       { text: "キャンセル", style: "cancel" },
       { text: "ログアウト", onPress: async () => {
@@ -164,10 +173,30 @@ export default function ProfileScreen() {
         }
       }
     ]);
-  };
+  }
+};
 
-  // アカウント削除
-  const handleDeleteAccount = async () => {
+const handleDeleteAccount = async () => {
+  if (Platform.OS === 'web') {
+    if (window.confirm('アカウントを削除しますか？すべてのデータが削除されます。')) {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('profiles').delete().eq('id', user.id);
+        }
+        await supabase.auth.signOut();
+        setUsername(''); setLocation(''); setHobbies(''); setBio(''); setAvatarUrl(null);
+        setCurrentView('edit');
+        initializeUser();
+        alert('データを削除しました');
+      } catch (e: any) {
+        alert('削除に失敗しました');
+      } finally {
+        setLoading(false);
+      }
+    }
+  } else {
     Alert.alert("アカウントを削除", "すべてのデータが削除されます。本当によろしいですか？", [
       { text: "キャンセル", style: "cancel" },
       { text: "削除する", style: "destructive", onPress: async () => {
@@ -190,40 +219,91 @@ export default function ProfileScreen() {
         }
       }
     ]);
-  };
+  }
+};
 
   const Header = ({ title, showBack = false, onBack, rightText, onRightPress }: HeaderProps) => (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-      <View style={styles.headerLeft}>{showBack && <TouchableOpacity onPress={onBack}><Ionicons name="chevron-back" size={28} color="#102A43" /></TouchableOpacity>}</View>
+      <View style={styles.headerLeft}>
+        {showBack && (
+          <TouchableOpacity onPress={onBack}>
+            <Icon name="chevron-back" size={28} color="#102A43" />
+          </TouchableOpacity>
+        )}
+      </View>
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={styles.headerRight}>{rightText && <TouchableOpacity onPress={onRightPress}><Text style={styles.headerActionText}>{rightText}</Text></TouchableOpacity>}</View>
+      <View style={styles.headerRight}>
+        {rightText && (
+          <TouchableOpacity onPress={onRightPress}>
+            <Text style={styles.headerActionText}>{rightText}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
   const renderEdit = () => (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex1}>
+    <View style={styles.flex1}>
       <Header title="プロフィール設定" showBack={!!username} onBack={() => setCurrentView('home')} rightText="完了" onRightPress={handleSave} />
-      <ScrollView style={styles.flex1} contentContainerStyle={styles.scrollContent} automaticallyAdjustKeyboardInsets={true}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View>
-            <TouchableOpacity style={styles.avatarContainer} onPress={pickImage} disabled={uploading}>
-              <View style={styles.avatarPlaceholder}>
-                {avatarUrl ? <Image source={{ uri: avatarUrl }} style={styles.avatarImage} /> : <Ionicons name="camera" size={40} color="#CBD5E0" />}
-                {uploading && <ActivityIndicator style={styles.absoluteLoader} color="#2B6CB0" />}
-              </View>
-              <Text style={styles.avatarHint}>{uploading ? 'アップロード中...' : '写真を変更する'}</Text>
-            </TouchableOpacity>
-            <View style={styles.inputGroup}><Text style={styles.inputLabel}>名前（必須）</Text><TextInput style={styles.inputField} value={username} onChangeText={setUsername} placeholder="例：こう" /></View>
-            <View style={styles.inputGroup}><Text style={styles.inputLabel}>地域</Text><TextInput style={styles.inputField} value={location} onChangeText={setLocation} placeholder="例：神奈川県" /></View>
-            <View style={styles.inputGroup}><Text style={styles.inputLabel}>趣味</Text><TextInput style={styles.inputField} value={hobbies} onChangeText={setHobbies} placeholder="例：お酒、読書" /></View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>自己紹介</Text>
-              <TextInput style={[styles.inputField, styles.textArea]} value={bio} onChangeText={setBio} multiline placeholder="よろしくお願いします" blurOnSubmit={false} />
+      <ScrollView style={styles.flex1} contentContainerStyle={styles.scrollContent}>
+        <View>
+          <TouchableOpacity style={styles.avatarContainer} onPress={pickImage} disabled={uploading}>
+            <View style={styles.avatarPlaceholder}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Icon name="camera" size={40} color="#CBD5E0" />
+              )}
+              {uploading && <ActivityIndicator style={styles.absoluteLoader} color="#2B6CB0" />}
             </View>
+            <Text style={styles.avatarHint}>
+              {uploading ? 'アップロード中...' : Platform.OS === 'web' ? '※画像アップロードは未対応' : '写真を変更する'}
+            </Text>
+          </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>名前（必須）</Text>
+            <TextInput 
+              style={styles.inputField} 
+              value={username} 
+              onChangeText={setUsername} 
+              placeholder="例:こう" 
+              placeholderTextColor="#9CA3AF"
+            />
           </View>
-        </TouchableWithoutFeedback>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>地域</Text>
+            <TextInput 
+              style={styles.inputField} 
+              value={location} 
+              onChangeText={setLocation} 
+              placeholder="例:神奈川県" 
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>趣味</Text>
+            <TextInput 
+              style={styles.inputField} 
+              value={hobbies} 
+              onChangeText={setHobbies} 
+              placeholder="例:お酒、読書" 
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>自己紹介</Text>
+            <TextInput 
+              style={[styles.inputField, styles.textArea]} 
+              value={bio} 
+              onChangeText={setBio} 
+              multiline 
+              placeholder="よろしくお願いします" 
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+        </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 
   const renderHome = () => (
@@ -232,18 +312,35 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatarPlaceholder}>
-            {avatarUrl ? <Image source={{ uri: avatarUrl }} style={styles.avatarImage} /> : <Ionicons name="person" size={60} color="#CBD5E0" />}
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Icon name="person" size={60} color="#CBD5E0" />
+            )}
           </View>
           <Text style={styles.userNameDisplay}>{username}</Text>
         </View>
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => setCurrentView('edit')}><Text style={styles.primaryButtonText}>プロフィールを編集</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setCurrentView('settings')}><Text style={styles.secondaryButtonText}>設定</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => setCurrentView('edit')}>
+            <Text style={styles.primaryButtonText}>プロフィールを編集</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setCurrentView('settings')}>
+            <Text style={styles.secondaryButtonText}>設定</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.displaySection}>
-          <View style={styles.displayItem}><Text style={styles.displayLabel}>地域</Text><Text style={styles.displayValue}>{location || '未設定'}</Text></View>
-          <View style={styles.displayItem}><Text style={styles.displayLabel}>趣味</Text><Text style={styles.displayValue}>{hobbies || '未設定'}</Text></View>
-          <View style={styles.displayItemColumn}><Text style={styles.displayLabel}>自己紹介</Text><Text style={styles.displayValueText}>{bio || '未設定'}</Text></View>
+          <View style={styles.displayItem}>
+            <Text style={styles.displayLabel}>地域</Text>
+            <Text style={styles.displayValue}>{location || '未設定'}</Text>
+          </View>
+          <View style={styles.displayItem}>
+            <Text style={styles.displayLabel}>趣味</Text>
+            <Text style={styles.displayValue}>{hobbies || '未設定'}</Text>
+          </View>
+          <View style={styles.displayItemColumn}>
+            <Text style={styles.displayLabel}>自己紹介</Text>
+            <Text style={styles.displayValueText}>{bio || '未設定'}</Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -255,18 +352,16 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionHeader}>アカウント管理</Text>
         <View style={styles.listContainer}>
-          {/* ログアウト */}
           <TouchableOpacity style={styles.listItem} onPress={handleLogout}>
             <Text style={styles.listItemText}>ログアウト</Text>
-            <Ionicons name="log-out-outline" size={20} color="#627D98" />
+            <Icon name="log-out-outline" size={20} color="#627D98" />
           </TouchableOpacity>
           
           <View style={styles.separator} />
           
-          {/* アカウントを削除 */}
           <TouchableOpacity style={styles.listItem} onPress={handleDeleteAccount}>
             <Text style={[styles.listItemText, { color: '#E53E3E' }]}>アカウントを削除</Text>
-            <Ionicons name="trash-outline" size={20} color="#E53E3E" />
+            <Icon name="trash-outline" size={20} color="#E53E3E" />
           </TouchableOpacity>
         </View>
       </ScrollView>

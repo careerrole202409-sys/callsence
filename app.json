@@ -13,18 +13,35 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.callsence.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "通話機能のためにマイクを使用します。",
+        "NSCameraUsageDescription": "ビデオ通話のためにカメラを使用します。",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.callsence.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d4714ccc-cdb4-45e1-b996-5b2b87a53773"
+      }
     }
   }
 }
